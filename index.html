@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Крестики-Нолики</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-theme="light">
+  <div class="app-shell">
+    <header class="topbar">
+      <button class="ghost-button" id="homeButton" type="button">Главная</button>
+      <div class="topbar-actions">
+        <button class="ghost-button" id="themeToggle" type="button">Сменить тему</button>
+        <button class="ghost-button" id="settingsButton" type="button">Настройки</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel panel-main active" id="menuView">
+        <div class="hero">
+          <p class="eyebrow">Веб-приложение</p>
+          <h1>Крестики-Нолики</h1>
+          <p class="hero-copy">
+            Три режима игры, гибкие настройки, искусственный интеллект и серверная игровая логика.
+          </p>
+        </div>
+
+        <div class="menu-grid">
+          <button class="mode-card active" data-mode="classic" type="button">
+            <span class="mode-card-title">Классический режим</span>
+            <span class="mode-card-copy">Поле 3x3, PvP или матч против ИИ.</span>
+          </button>
+          <button class="mode-card" data-mode="ultimate" type="button">
+            <span class="mode-card-title">Ultimate режим</span>
+            <span class="mode-card-copy">Девять малых полей и стратегический выбор сектора.</span>
+          </button>
+          <button class="mode-card" data-mode="multi" type="button">
+            <span class="mode-card-title">3-4 игрока</span>
+            <span class="mode-card-copy">Большое поле, до 4 участников и настраиваемая линия победы.</span>
+          </button>
+        </div>
+
+        <section class="description-card" id="modeDescription"></section>
+
+        <section class="config-card">
+          <div class="config-section" id="classicConfig">
+            <h2>Параметры классической игры</h2>
+            <label>
+              Формат матча
+              <select id="classicMatchType">
+                <option value="pvp">Человек против человека</option>
+                <option value="ai">Человек против ИИ</option>
+              </select>
+            </label>
+            <label>
+              Первый ход
+              <select id="classicFirstPlayer">
+                <option value="0">Игрок 1</option>
+                <option value="1">Игрок 2 / ИИ</option>
+              </select>
+            </label>
+            <p class="config-note">Высокая сложность: полный minimax для поля 3x3.</p>
+          </div>
+
+          <div class="config-section hidden" id="ultimateConfig">
+            <h2>Параметры Ultimate режима</h2>
+            <label>
+              Формат матча
+              <select id="ultimateMatchType">
+                <option value="pvp">Человек против человека</option>
+                <option value="ai">Человек против ИИ</option>
+              </select>
+            </label>
+            <label>
+              Первый ход
+              <select id="ultimateFirstPlayer">
+                <option value="0">Игрок 1</option>
+                <option value="1">Игрок 2 / ИИ</option>
+              </select>
+            </label>
+            <p class="config-note">Ограничение ИИ: для Ultimate используется эвристика и ограниченный поиск вместо полного minimax.</p>
+          </div>
+
+          <div class="config-section hidden" id="multiConfig">
+            <h2>Параметры режима 3-4 игроков</h2>
+            <label>
+              Количество игроков
+              <select id="multiPlayersCount">
+                <option value="3">3 игрока</option>
+                <option value="4">4 игрока</option>
+              </select>
+            </label>
+            <label>
+              Людей за устройством
+              <select id="multiHumansCount">
+                <option value="1">1 человек</option>
+                <option value="2">2 человека</option>
+                <option value="3">3 человека</option>
+                <option value="4">4 человека</option>
+              </select>
+            </label>
+            <label>
+              Размер поля
+              <select id="multiBoardSize">
+                <option value="5">5x5</option>
+                <option value="6">6x6</option>
+              </select>
+            </label>
+            <label>
+              Длина победной линии
+              <select id="multiWinLength">
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+            </label>
+            <p class="config-note">Ограничение ИИ: для режимов 3-4 игрока используется тактическая оценка ходов без полного перебора всей партии.</p>
+          </div>
+
+          <div class="config-footer">
+            <button class="primary-button" id="startGameButton" type="button">Начать игру</button>
+          </div>
+        </section>
+      </section>
+
+      <section class="panel hidden" id="gameView">
+        <div class="game-header">
+          <div>
+            <p class="eyebrow">Игровой режим</p>
+            <h2 id="gameTitle">Классический режим</h2>
+          </div>
+          <div class="game-actions">
+            <button class="ghost-button" id="restartButton" type="button">Новый раунд</button>
+            <button class="ghost-button" id="endGameButton" type="button">Завершить игру</button>
+          </div>
+        </div>
+
+        <section class="status-grid">
+          <article class="status-card">
+            <span class="status-label">Текущий ход</span>
+            <strong id="turnIndicator">Игрок 1</strong>
+          </article>
+          <article class="status-card">
+            <span class="status-label">Состояние партии</span>
+            <strong id="resultIndicator">Игра продолжается</strong>
+          </article>
+          <article class="status-card">
+            <span class="status-label">Подсказка</span>
+            <strong id="hintIndicator">Выберите клетку.</strong>
+          </article>
+        </section>
+
+        <section class="board-shell">
+          <div id="boardContainer"></div>
+        </section>
+
+        <section class="players-strip" id="playersStrip"></section>
+      </section>
+
+      <aside class="panel panel-side hidden" id="settingsView">
+        <div class="settings-header">
+          <div>
+            <p class="eyebrow">Параметры</p>
+            <h2>Настройки</h2>
+          </div>
+          <button class="ghost-button" id="closeSettingsButton" type="button">Закрыть</button>
+        </div>
+
+        <div class="settings-list">
+          <label class="toggle-row">
+            <span>Звуковые эффекты</span>
+            <input id="soundEnabled" type="checkbox">
+          </label>
+          <label class="toggle-row">
+            <span>Анимации</span>
+            <input id="animationsEnabled" type="checkbox" checked>
+          </label>
+          <label>
+            Тема оформления
+            <select id="themeSelect">
+              <option value="light">Светлая</option>
+              <option value="dark">Тёмная</option>
+              <option value="inferno">Адская</option>
+            </select>
+          </label>
+          <label>
+            Сложность ИИ
+            <select id="aiDifficulty">
+              <option value="easy">Лёгкий</option>
+              <option value="medium">Средний</option>
+              <option value="hard">Высокий</option>
+            </select>
+          </label>
+          <label>
+            Набор фигур
+            <select id="symbolSet">
+              <option value="classic">X и O</option>
+              <option value="blade">Меч и щит</option>
+              <option value="elemental">Огонь и лёд</option>
+              <option value="cosmic">Солнце и луна</option>
+              <option value="digits">1 и 0</option>
+            </select>
+          </label>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <div class="modal-backdrop hidden" id="resultModal">
+    <div class="modal-card">
+      <p class="eyebrow">Результат партии</p>
+      <h2 id="modalTitle">Раунд завершён</h2>
+      <p class="modal-copy" id="modalMessage">Победитель определён.</p>
+      <div class="modal-score" id="modalScore"></div>
+      <div class="modal-actions">
+        <button class="primary-button" id="modalRestartButton" type="button">Ещё раунд</button>
+        <button class="ghost-button" id="modalMenuButton" type="button">В меню</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

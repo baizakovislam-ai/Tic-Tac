@@ -1,0 +1,10 @@
+^C:\USERS\V15\ONEDRIVE\DESKTOP\ПИ-2-24\2-КУРС\4-СЕМЕСТР\ООП\TIC-TAC\BACKEND\BUILD\CMAKEFILES\50DEBA5CBA0DF9E336CB7C799D8DBF59\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/V15/OneDrive/Desktop/ПИ-2-24/2-курс/4-семестр/ООП/Tic-Tac/backend -BC:/Users/V15/OneDrive/Desktop/ПИ-2-24/2-курс/4-семестр/ООП/Tic-Tac/backend/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/V15/OneDrive/Desktop/ПИ-2-24/2-курс/4-семестр/ООП/Tic-Tac/backend/build/TicTacToeWeb.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
