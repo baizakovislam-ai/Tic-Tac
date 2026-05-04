@@ -18,9 +18,9 @@ add_executable(tic_tac_server
 
 target_include_directories(tic_tac_server PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/asio/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/Crow/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/asio/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party
 )
 
 target_compile_definitions(tic_tac_server PRIVATE
