@@ -1,7 +1,6 @@
 #include "session_manager.hpp"
 
 #include <algorithm>
-#include <stdexcept>
 
 Json SessionManager::updateSettings(const Json& payload) {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -27,10 +26,13 @@ Json SessionManager::startGame(const Json& payload) {
     std::lock_guard<std::mutex> lock(mutex_);
     lastConfig_ = parseStartConfig(payload, settings_);
     game_ = makeGame(*lastConfig_);
+    scores_.assign(game_->toJson()["players"].size(), 0);
+    roundScored_ = false;
     runAiUntilHumanTurn();
+    updateScoreIfNeeded();
     return {
         {"status", "success"},
-        {"game", game_->toJson()}
+        {"game", buildGamePayload()}
     };
 }
 
@@ -40,16 +42,20 @@ Json SessionManager::restartGame() {
         return {{"status", "error"}, {"message", "Нет предыдущей игры для перезапуска."}};
     }
     game_ = makeGame(*lastConfig_);
+    roundScored_ = false;
     runAiUntilHumanTurn();
+    updateScoreIfNeeded();
     return {
         {"status", "success"},
-        {"game", game_->toJson()}
+        {"game", buildGamePayload()}
     };
 }
 
 Json SessionManager::endGame() {
     std::lock_guard<std::mutex> lock(mutex_);
     game_.reset();
+    scores_.clear();
+    roundScored_ = false;
     return {{"status", "success"}, {"game", nullptr}};
 }
 
@@ -64,7 +70,7 @@ Json SessionManager::getState() const {
             {"aiDifficulty", settings_.aiDifficulty},
             {"symbolSet", settings_.symbolSet}
         }},
-        {"game", game_ ? game_->toJson() : Json(nullptr)}
+        {"game", game_ ? buildGamePayload() : Json(nullptr)}
     };
 }
 
@@ -76,10 +82,11 @@ Json SessionManager::makeMove(const Json& payload) {
 
     const auto result = game_->applyMove(payload);
     if (!result.ok) {
-        return {{"status", "error"}, {"message", result.message}, {"game", game_->toJson()}};
+        return {{"status", "error"}, {"message", result.message}, {"game", buildGamePayload()}};
     }
     runAiUntilHumanTurn();
-    return {{"status", "success"}, {"game", game_->toJson()}};
+    updateScoreIfNeeded();
+    return {{"status", "success"}, {"game", buildGamePayload()}};
 }
 
 void SessionManager::runAiUntilHumanTurn() {
@@ -89,6 +96,33 @@ void SessionManager::runAiUntilHumanTurn() {
     while (!game_->isOver() && game_->currentPlayerIsAi()) {
         game_->performAiTurn(settings_.aiDifficulty);
     }
+}
+
+void SessionManager::updateScoreIfNeeded() {
+    if (!game_ || roundScored_) {
+        return;
+    }
+    const Json gameJson = game_->toJson();
+    if (gameJson["winner"].is_number_integer()) {
+        const int winner = gameJson["winner"].get<int>();
+        if (winner >= 0 && winner < static_cast<int>(scores_.size())) {
+            ++scores_[winner];
+        }
+        roundScored_ = true;
+        return;
+    }
+    if (gameJson.value("isDraw", false)) {
+        roundScored_ = true;
+    }
+}
+
+Json SessionManager::buildGamePayload() const {
+    Json gameJson = game_ ? game_->toJson() : Json(nullptr);
+    if (!game_.get()) {
+        return gameJson;
+    }
+    gameJson["scores"] = scores_;
+    return gameJson;
 }
 
 StartConfig SessionManager::parseStartConfig(const Json& payload, const Settings& currentSettings) {
@@ -109,7 +143,10 @@ StartConfig SessionManager::parseStartConfig(const Json& payload, const Settings
         const auto& gameConfig = payload["config"];
         if (config.mode == "classic") {
             config.classic.matchType = gameConfig.value("classicMatchType", "pvp");
-            config.classic.firstPlayer = gameConfig.value("classicFirstPlayer", 0);
+            config.classic.userSymbolIndex = gameConfig.value("classicUserSymbolIndex", 0);
+        } else if (config.mode == "ultimate") {
+            config.ultimate.matchType = gameConfig.value("ultimateMatchType", "pvp");
+            config.ultimate.userSymbolIndex = gameConfig.value("ultimateUserSymbolIndex", 0);
         } else if (config.mode == "multi") {
             config.multi.playersCount = gameConfig.value("multiPlayersCount", 3);
             config.multi.humansCount = gameConfig.value("multiHumansCount", 1);
@@ -125,6 +162,5 @@ StartConfig SessionManager::parseStartConfig(const Json& payload, const Settings
     settings_.animationsEnabled = config.settings.animationsEnabled;
     settings_.aiDifficulty = config.settings.aiDifficulty;
     settings_.symbolSet = config.settings.symbolSet;
-
     return config;
 }

@@ -9,9 +9,11 @@
 using Board = std::vector<std::vector<std::string>>;
 
 std::vector<Player> buildPlayers(int count, int humanCount, const std::string& symbolSet);
+std::vector<Player> buildDuelPlayers(const std::string& symbolSet, int humanSymbolIndex);
 LineResult evaluateBoard(const Board& board, int winLength);
 std::vector<int> randomEmptyCell(const Board& board);
 std::optional<std::vector<int>> chooseBlockingMove(const Board& board, const std::vector<Player>& players, int currentPlayer, int winLength);
+int countEmptyCells(const Board& board);
 
 class Game {
   public:

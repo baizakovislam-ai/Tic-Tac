@@ -1,10 +1,10 @@
-const STORAGE_KEY = "tic-tac-settings-v2";
+const STORAGE_KEY = "tic-tac-settings-v3";
 const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:18080" : "";
 
 const modeDescriptions = {
-  classic: "Классическая партия на поле 3x3. Есть PvP и режим против ИИ.",
-  ultimate: "Большое поле состоит из девяти малых досок 3x3 с правилами Ultimate.",
-  multi: "Режим на 3-4 игроков с увеличенным полем и настраиваемой длиной линии.",
+  classic: "Классическая партия на поле 3x3. Если выбран ИИ, игрок сам выбирает свою фигуру.",
+  ultimate: "Ultimate режим с реальным ИИ и ограниченным поиском для серверной части.",
+  multi: "Режим на 3-4 игроков с увеличенным полем и тактическим ИИ для свободных слотов.",
 };
 
 const defaults = {
@@ -20,9 +20,14 @@ const state = {
   currentMode: "classic",
   game: null,
   busy: false,
+  resultShownFor: null,
+  modalTimer: null,
+  previousGame: null,
   selectedModeConfig: {
     classicMatchType: "pvp",
-    classicFirstPlayer: 0,
+    classicUserSymbolIndex: 0,
+    ultimateMatchType: "pvp",
+    ultimateUserSymbolIndex: 0,
     multiPlayersCount: 3,
     multiHumansCount: 1,
     multiBoardSize: 5,
@@ -43,7 +48,11 @@ const els = {
   playersStrip: document.getElementById("playersStrip"),
   gameTitle: document.getElementById("gameTitle"),
   classicMatchType: document.getElementById("classicMatchType"),
-  classicFirstPlayer: document.getElementById("classicFirstPlayer"),
+  classicSymbolWrap: document.getElementById("classicSymbolWrap"),
+  classicUserSymbolIndex: document.getElementById("classicUserSymbolIndex"),
+  ultimateMatchType: document.getElementById("ultimateMatchType"),
+  ultimateSymbolWrap: document.getElementById("ultimateSymbolWrap"),
+  ultimateUserSymbolIndex: document.getElementById("ultimateUserSymbolIndex"),
   multiPlayersCount: document.getElementById("multiPlayersCount"),
   multiHumansCount: document.getElementById("multiHumansCount"),
   multiBoardSize: document.getElementById("multiBoardSize"),
@@ -56,6 +65,12 @@ const els = {
   startGameButton: document.getElementById("startGameButton"),
   restartButton: document.getElementById("restartButton"),
   endGameButton: document.getElementById("endGameButton"),
+  resultModal: document.getElementById("resultModal"),
+  modalTitle: document.getElementById("modalTitle"),
+  modalMessage: document.getElementById("modalMessage"),
+  modalScore: document.getElementById("modalScore"),
+  modalRestartButton: document.getElementById("modalRestartButton"),
+  modalMenuButton: document.getElementById("modalMenuButton"),
 };
 
 bootstrap();
@@ -73,44 +88,61 @@ function attachEvents() {
     button.addEventListener("click", () => setMode(button.dataset.mode));
   });
 
-  document.getElementById("settingsButton").addEventListener("click", () => {
-    els.settingsView.classList.toggle("hidden");
+  const settingsButton = document.getElementById("settingsButton");
+  const closeSettingsButton = document.getElementById("closeSettingsButton");
+  const themeToggle = document.getElementById("themeToggle");
+  const homeButton = document.getElementById("homeButton");
+
+  settingsButton?.addEventListener("click", () => {
+    els.settingsView?.classList.toggle("hidden");
+  });
+  closeSettingsButton?.addEventListener("click", () => {
+    els.settingsView?.classList.add("hidden");
   });
 
-  document.getElementById("closeSettingsButton").addEventListener("click", () => {
-    els.settingsView.classList.add("hidden");
-  });
-
-  document.getElementById("themeToggle").addEventListener("click", async () => {
+  themeToggle?.addEventListener("click", async () => {
     const order = ["light", "dark", "inferno"];
     const next = order[(order.indexOf(state.settings.theme) + 1) % order.length];
     await updateSettings({ theme: next });
   });
 
-  document.getElementById("homeButton").addEventListener("click", endGameAndShowMenu);
-  els.startGameButton.addEventListener("click", startSelectedMode);
-  els.restartButton.addEventListener("click", restartCurrentGame);
-  els.endGameButton.addEventListener("click", endGameAndShowMenu);
+  homeButton?.addEventListener("click", endGameAndShowMenu);
+  els.startGameButton?.addEventListener("click", startSelectedMode);
+  els.restartButton?.addEventListener("click", restartCurrentGame);
+  els.endGameButton?.addEventListener("click", endGameAndShowMenu);
+  els.modalRestartButton?.addEventListener("click", async () => {
+    hideResultModal();
+    await restartCurrentGame();
+  });
+  els.modalMenuButton?.addEventListener("click", async () => {
+    hideResultModal();
+    await endGameAndShowMenu();
+  });
 
   [
     ["classicMatchType", els.classicMatchType],
-    ["classicFirstPlayer", els.classicFirstPlayer],
+    ["classicUserSymbolIndex", els.classicUserSymbolIndex],
+    ["ultimateMatchType", els.ultimateMatchType],
+    ["ultimateUserSymbolIndex", els.ultimateUserSymbolIndex],
     ["multiPlayersCount", els.multiPlayersCount],
     ["multiHumansCount", els.multiHumansCount],
     ["multiBoardSize", els.multiBoardSize],
     ["multiWinLength", els.multiWinLength],
   ].forEach(([key, element]) => {
+    if (!element) {
+      return;
+    }
     element.addEventListener("change", () => {
       state.selectedModeConfig[key] = Number.isNaN(Number(element.value)) ? element.value : Number(element.value);
-      syncMultiConstraints();
+      syncConfigVisibility();
     });
   });
 
-  els.themeSelect.addEventListener("change", async () => updateSettings({ theme: els.themeSelect.value }));
-  els.soundEnabled.addEventListener("change", async () => updateSettings({ soundEnabled: els.soundEnabled.checked }));
-  els.animationsEnabled.addEventListener("change", async () => updateSettings({ animationsEnabled: els.animationsEnabled.checked }));
-  els.aiDifficulty.addEventListener("change", async () => updateSettings({ aiDifficulty: els.aiDifficulty.value }));
-  els.symbolSet.addEventListener("change", async () => updateSettings({ symbolSet: els.symbolSet.value }));
+  els.themeSelect?.addEventListener("change", async () => updateSettings({ theme: els.themeSelect.value }));
+  els.soundEnabled?.addEventListener("change", async () => updateSettings({ soundEnabled: els.soundEnabled.checked }));
+  els.animationsEnabled?.addEventListener("change", async () => updateSettings({ animationsEnabled: els.animationsEnabled.checked }));
+  els.aiDifficulty?.addEventListener("change", async () => updateSettings({ aiDifficulty: els.aiDifficulty.value }));
+  els.symbolSet?.addEventListener("change", async () => updateSettings({ symbolSet: els.symbolSet.value }));
 }
 
 async function hydrateFromServer() {
@@ -130,7 +162,7 @@ async function hydrateFromServer() {
       renderGame();
     }
   } catch (error) {
-    renderStatus("Сервер недоступен. Запусти backend и открой игру снова.");
+    renderStatus("Сервер недоступен. Запусти backend и обнови страницу.");
   }
 }
 
@@ -161,49 +193,49 @@ function setMode(mode) {
   document.getElementById("ultimateConfig").classList.toggle("hidden", mode !== "ultimate");
   document.getElementById("multiConfig").classList.toggle("hidden", mode !== "multi");
   els.modeDescription.textContent = modeDescriptions[mode];
-  syncMultiConstraints();
+  syncConfigVisibility();
 }
 
-function syncMultiConstraints() {
-  const players = Number(els.multiPlayersCount.value);
-  Array.from(els.multiHumansCount.options).forEach((option) => {
+function syncConfigVisibility() {
+  els.classicSymbolWrap?.classList.toggle("hidden", els.classicMatchType?.value !== "ai");
+  els.ultimateSymbolWrap?.classList.toggle("hidden", els.ultimateMatchType?.value !== "ai");
+
+  const players = Number(els.multiPlayersCount?.value || 3);
+  Array.from(els.multiHumansCount?.options || []).forEach((option) => {
     option.hidden = Number(option.value) > players;
   });
-  if (Number(els.multiHumansCount.value) > players) {
+  if (els.multiHumansCount && Number(els.multiHumansCount.value) > players) {
     els.multiHumansCount.value = String(players);
     state.selectedModeConfig.multiHumansCount = players;
   }
 
-  const boardSize = Number(els.multiBoardSize.value);
-  Array.from(els.multiWinLength.options).forEach((option) => {
+  const boardSize = Number(els.multiBoardSize?.value || 5);
+  Array.from(els.multiWinLength?.options || []).forEach((option) => {
     option.hidden = Number(option.value) > boardSize;
   });
-  if (Number(els.multiWinLength.value) > boardSize) {
-    els.multiWinLength.value = String(Math.min(3, boardSize));
-    state.selectedModeConfig.multiWinLength = Number(els.multiWinLength.value);
+  if (els.multiWinLength && Number(els.multiWinLength.value) > boardSize) {
+    const nextValue = Math.min(3, boardSize);
+    els.multiWinLength.value = String(nextValue);
+    state.selectedModeConfig.multiWinLength = nextValue;
   }
 }
 
 function setBusy(next) {
   state.busy = next;
-  els.startGameButton.disabled = next;
-  els.restartButton.disabled = next;
+  if (els.startGameButton) {
+    els.startGameButton.disabled = next;
+  }
+  if (els.restartButton) {
+    els.restartButton.disabled = next;
+  }
 }
 
 function showMenu() {
   els.menuView.classList.remove("hidden");
   els.gameView.classList.add("hidden");
   state.game = null;
+  state.resultShownFor = null;
   renderStatus();
-}
-
-async function endGameAndShowMenu() {
-  try {
-    await api("/endGame", "POST");
-  } catch (error) {
-    renderStatus(error.message);
-  }
-  showMenu();
 }
 
 function showGame() {
@@ -213,6 +245,7 @@ function showGame() {
 
 async function startSelectedMode() {
   setBusy(true);
+  hideResultModal();
   try {
     const data = await api("/startGame", "POST", {
       mode: state.currentMode,
@@ -220,6 +253,7 @@ async function startSelectedMode() {
       settings: state.settings,
     });
     state.game = data.game;
+    state.resultShownFor = null;
     els.gameTitle.textContent = getModeTitle(state.game.mode);
     showGame();
   } catch (error) {
@@ -234,9 +268,11 @@ async function startSelectedMode() {
 
 async function restartCurrentGame() {
   setBusy(true);
+  hideResultModal();
   try {
     const data = await api("/restart", "POST");
     state.game = data.game;
+    state.resultShownFor = null;
     els.gameTitle.textContent = getModeTitle(state.game.mode);
     showGame();
   } catch (error) {
@@ -247,6 +283,16 @@ async function restartCurrentGame() {
       renderGame();
     }
   }
+}
+
+async function endGameAndShowMenu() {
+  try {
+    await api("/endGame", "POST");
+  } catch (error) {
+    renderStatus(error.message);
+  }
+  hideResultModal();
+  showMenu();
 }
 
 async function updateSettings(next) {
@@ -267,6 +313,8 @@ function renderGame() {
   renderBoard();
   renderPlayers();
   renderStatus();
+  maybeShowResultModal();
+  state.previousGame = JSON.parse(JSON.stringify(state.game));
 }
 
 function renderBoard() {
@@ -290,6 +338,12 @@ function renderClassicBoard() {
       button.type = "button";
       button.textContent = cell || "";
       button.disabled = Boolean(cell) || isGameOver() || state.busy;
+      if (isFreshClassicMove(x, y)) {
+        button.classList.add("fresh-move");
+      }
+      if (isGameOver()) {
+        button.classList.add("match-end");
+      }
       if (isWinningCell(x, y)) {
         button.classList.add("win-line");
       }
@@ -311,6 +365,12 @@ function renderMultiBoard() {
       button.type = "button";
       button.textContent = cell || "";
       button.disabled = Boolean(cell) || isGameOver() || state.busy;
+      if (isFreshClassicMove(x, y)) {
+        button.classList.add("fresh-move");
+      }
+      if (isGameOver()) {
+        button.classList.add("match-end");
+      }
       if (isWinningCell(x, y)) {
         button.classList.add("win-line");
       }
@@ -332,6 +392,9 @@ function renderUltimateBoard() {
     if (active && !mini.winner && !mini.draw) {
       macro.classList.add("active-target");
     }
+    if (isGameOver()) {
+      macro.classList.add("match-end");
+    }
     if (mini.winner || mini.draw) {
       macro.classList.add("locked");
       macro.dataset.owner = mini.winner || "•";
@@ -347,6 +410,12 @@ function renderUltimateBoard() {
         button.textContent = cell || "";
         const canPlayHere = (state.game.activeMacroIndex === null || state.game.activeMacroIndex === macroIndex) && !mini.winner && !mini.draw;
         button.disabled = Boolean(cell) || !canPlayHere || isGameOver() || state.busy;
+        if (isFreshUltimateMove(macroIndex, x, y)) {
+          button.classList.add("fresh-move");
+        }
+        if (isGameOver()) {
+          button.classList.add("match-end");
+        }
         if (!button.disabled) {
           button.classList.add("target");
         }
@@ -359,6 +428,7 @@ function renderUltimateBoard() {
     });
     wrapper.appendChild(macro);
   });
+
   els.boardContainer.appendChild(wrapper);
 }
 
@@ -373,7 +443,12 @@ function renderPlayers() {
     if (index === state.game.currentPlayer && !isGameOver()) {
       chip.classList.add("active");
     }
-    chip.innerHTML = `<strong>${player.label}</strong><br><span>${player.symbol}${player.isAI ? " • ИИ" : ""}</span>`;
+    const score = Array.isArray(state.game.scores) ? state.game.scores[index] ?? 0 : 0;
+    chip.innerHTML = `
+      <strong>${player.label}</strong><br>
+      <span>${player.symbol}${player.isAI ? " • ИИ" : ""}</span><br>
+      <span class="player-chip-score">Счёт: ${score}</span>
+    `;
     els.playersStrip.appendChild(chip);
   });
 }
@@ -417,7 +492,7 @@ function renderStatus(message) {
     return;
   }
 
-  els.hintIndicator.textContent = isGameOver() ? "Можно начать новую игру." : "Выберите клетку.";
+  els.hintIndicator.textContent = isGameOver() ? "Раунд завершён. Можно начать новый." : "Выберите клетку.";
 }
 
 async function makeMove(payload) {
@@ -438,6 +513,73 @@ async function makeMove(payload) {
   }
 }
 
+function maybeShowResultModal() {
+  if (!isGameOver()) {
+    return;
+  }
+  const signature = JSON.stringify({
+    mode: state.game.mode,
+    winner: state.game.winner,
+    draw: state.game.isDraw,
+    scores: state.game.scores,
+  });
+  if (state.resultShownFor === signature) {
+    return;
+  }
+  state.resultShownFor = signature;
+
+  if (state.game.winner !== null) {
+    const winner = state.game.players[state.game.winner];
+    els.modalTitle.textContent = "Есть победитель";
+    els.modalMessage.textContent = `${winner.label} выиграл этот матч.`;
+  } else {
+    els.modalTitle.textContent = "Ничья";
+    els.modalMessage.textContent = "Матч завершён без победителя.";
+  }
+
+  els.modalScore.innerHTML = "";
+  state.game.players.forEach((player, index) => {
+    const row = document.createElement("div");
+    row.className = "modal-score-row";
+    row.innerHTML = `<span>${player.label} ${player.symbol}</span><strong>${state.game.scores?.[index] ?? 0}</strong>`;
+    els.modalScore.appendChild(row);
+  });
+  if (state.modalTimer) {
+    clearTimeout(state.modalTimer);
+  }
+  const delay = state.settings.animationsEnabled ? 950 : 260;
+  state.modalTimer = window.setTimeout(() => {
+    els.resultModal.classList.remove("hidden");
+    state.modalTimer = null;
+  }, delay);
+}
+
+function hideResultModal() {
+  if (state.modalTimer) {
+    clearTimeout(state.modalTimer);
+    state.modalTimer = null;
+  }
+  els.resultModal.classList.add("hidden");
+}
+
+function isFreshClassicMove(x, y) {
+  const previousBoard = state.previousGame?.board;
+  const currentValue = state.game?.board?.[y]?.[x];
+  if (!currentValue || !previousBoard) {
+    return false;
+  }
+  return !previousBoard[y]?.[x];
+}
+
+function isFreshUltimateMove(macroIndex, x, y) {
+  const previousBoard = state.previousGame?.miniBoards?.[macroIndex]?.board;
+  const currentValue = state.game?.miniBoards?.[macroIndex]?.board?.[y]?.[x];
+  if (!currentValue || !previousBoard) {
+    return false;
+  }
+  return !previousBoard[y]?.[x];
+}
+
 function isWinningCell(x, y) {
   return (state.game?.winningCells || []).some(([wx, wy]) => wx === x && wy === y);
 }
@@ -456,24 +598,27 @@ function getModeTitle(mode) {
 
 function applySettingsToInputs() {
   els.body.dataset.theme = state.settings.theme;
-  els.themeSelect.value = state.settings.theme;
-  els.soundEnabled.checked = state.settings.soundEnabled;
-  els.animationsEnabled.checked = state.settings.animationsEnabled;
-  els.aiDifficulty.value = state.settings.aiDifficulty;
-  els.symbolSet.value = state.settings.symbolSet;
-  els.classicMatchType.value = state.selectedModeConfig.classicMatchType;
-  els.classicFirstPlayer.value = String(state.selectedModeConfig.classicFirstPlayer);
-  els.multiPlayersCount.value = String(state.selectedModeConfig.multiPlayersCount);
-  els.multiHumansCount.value = String(state.selectedModeConfig.multiHumansCount);
-  els.multiBoardSize.value = String(state.selectedModeConfig.multiBoardSize);
-  els.multiWinLength.value = String(state.selectedModeConfig.multiWinLength);
-  syncMultiConstraints();
+  if (els.themeSelect) els.themeSelect.value = state.settings.theme;
+  if (els.soundEnabled) els.soundEnabled.checked = state.settings.soundEnabled;
+  if (els.animationsEnabled) els.animationsEnabled.checked = state.settings.animationsEnabled;
+  if (els.aiDifficulty) els.aiDifficulty.value = state.settings.aiDifficulty;
+  if (els.symbolSet) els.symbolSet.value = state.settings.symbolSet;
+
+  if (els.classicMatchType) els.classicMatchType.value = state.selectedModeConfig.classicMatchType;
+  if (els.classicUserSymbolIndex) els.classicUserSymbolIndex.value = String(state.selectedModeConfig.classicUserSymbolIndex);
+  if (els.ultimateMatchType) els.ultimateMatchType.value = state.selectedModeConfig.ultimateMatchType;
+  if (els.ultimateUserSymbolIndex) els.ultimateUserSymbolIndex.value = String(state.selectedModeConfig.ultimateUserSymbolIndex);
+  if (els.multiPlayersCount) els.multiPlayersCount.value = String(state.selectedModeConfig.multiPlayersCount);
+  if (els.multiHumansCount) els.multiHumansCount.value = String(state.selectedModeConfig.multiHumansCount);
+  if (els.multiBoardSize) els.multiBoardSize.value = String(state.selectedModeConfig.multiBoardSize);
+  if (els.multiWinLength) els.multiWinLength.value = String(state.selectedModeConfig.multiWinLength);
+  syncConfigVisibility();
 }
 
 function loadSettings() {
   try {
     return { ...defaults, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") };
-  } catch (error) {
+  } catch {
     return { ...defaults };
   }
 }

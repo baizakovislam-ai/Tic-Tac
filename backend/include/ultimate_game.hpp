@@ -22,6 +22,11 @@ class UltimateGame : public Game {
   private:
     void refreshMacroResult();
     bool allMiniBoardsFinished() const;
+    int countRemainingMoves() const;
+    std::vector<std::vector<int>> collectLegalMoves() const;
+    std::vector<int> chooseHeuristicMove(const std::string& difficulty);
+    int evaluateHeuristicMove(int macroIndex, int x, int y, bool withOpponentReply);
+    int scoreUltimatePosition(int perspectivePlayer) const;
 
     Board macroBoard_;
     std::vector<MiniBoardState> miniBoards_;

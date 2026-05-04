@@ -1,0 +1,234 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam ArrowColor #666666
+skinparam ClassBorderColor #333333
+skinparam ClassBackgroundColor #FCFCFC
+
+title Диаграмма классов проекта "Крестики-Нолики"
+
+package "Core Models" {
+  class Settings {
+    +theme: string
+    +soundEnabled: bool
+    +animationsEnabled: bool
+    +aiDifficulty: string
+    +symbolSet: string
+  }
+
+  class Player {
+    +id: int
+    +label: string
+    +symbol: string
+    +isAI: bool
+  }
+
+  class MoveResult {
+    +ok: bool
+    +message: string
+  }
+
+  class LineResult {
+    +winnerSymbol: optional<string>
+    +draw: bool
+    +winningCells: vector<vector<int>>
+  }
+
+  class ClassicConfig {
+    +matchType: string
+    +userSymbolIndex: int
+  }
+
+  class UltimateConfig {
+    +matchType: string
+    +userSymbolIndex: int
+  }
+
+  class MultiConfig {
+    +playersCount: int
+    +humansCount: int
+    +boardSize: int
+    +winLength: int
+  }
+
+  class StartConfig {
+    +mode: string
+    +classic: ClassicConfig
+    +ultimate: UltimateConfig
+    +multi: MultiConfig
+    +settings: Settings
+  }
+
+  class MiniBoardState {
+    +board: Board
+    +winner: string
+    +draw: bool
+    +winningCells: vector<vector<int>>
+  }
+}
+
+package "Game Layer" {
+  abstract class Game {
+    #mode_: string
+    +Game(mode: string)
+    +applyMove(move: Json): MoveResult
+    +toJson(): Json
+    +currentPlayerIsAi(): bool
+    +performAiTurn(difficulty: string): void
+    +isOver(): bool
+    +mode(): const string&
+  }
+
+  class ClassicGame {
+    -board_: Board
+    -players_: vector<Player>
+    -currentPlayer_: int
+    -winner_: int
+    -draw_: bool
+    -winningCells_: vector<vector<int>>
+    +ClassicGame(config: StartConfig)
+    +applyMove(move: Json): MoveResult
+    +toJson(): Json
+    +currentPlayerIsAi(): bool
+    +performAiTurn(difficulty: string): void
+    +isOver(): bool
+    -minimax(maximizing: bool, aiSymbol: string, humanSymbol: string): int
+    -chooseHardMove(): vector<int>
+    -finalizeTurn(): void
+  }
+
+  class UltimateGame {
+    -macroBoard_: Board
+    -miniBoards_: vector<MiniBoardState>
+    -players_: vector<Player>
+    -currentPlayer_: int
+    -activeMacroIndex_: int
+    -winner_: int
+    -draw_: bool
+    +UltimateGame(config: StartConfig)
+    +applyMove(move: Json): MoveResult
+    +toJson(): Json
+    +currentPlayerIsAi(): bool
+    +performAiTurn(difficulty: string): void
+    +isOver(): bool
+    -refreshMacroResult(): void
+    -allMiniBoardsFinished(): bool
+    -countRemainingMoves(): int
+    -collectLegalMoves(): vector<vector<int>>
+    -chooseHeuristicMove(difficulty: string): vector<int>
+    -evaluateHeuristicMove(macroIndex: int, x: int, y: int, withOpponentReply: bool): int
+    -scoreUltimatePosition(perspectivePlayer: int): int
+  }
+
+  class MultiGame {
+    -board_: Board
+    -players_: vector<Player>
+    -boardSize_: int
+    -winLength_: int
+    -currentPlayer_: int
+    -winner_: int
+    -draw_: bool
+    -winningCells_: vector<vector<int>>
+    +MultiGame(config: StartConfig)
+    +applyMove(move: Json): MoveResult
+    +toJson(): Json
+    +currentPlayerIsAi(): bool
+    +performAiTurn(difficulty: string): void
+    +isOver(): bool
+    -finalizeTurn(): void
+    -chooseHeuristicMove(): vector<int>
+    -evaluateCellScore(x: int, y: int, playerIndex: int): int
+  }
+}
+
+package "Session Layer" {
+  class SessionManager {
+    -mutex_: mutex
+    -settings_: Settings
+    -game_: unique_ptr<Game>
+    -lastConfig_: optional<StartConfig>
+    -scores_: vector<int>
+    -roundScored_: bool
+    +updateSettings(payload: Json): Json
+    +startGame(payload: Json): Json
+    +restartGame(): Json
+    +endGame(): Json
+    +getState(): Json
+    +makeMove(payload: Json): Json
+    -runAiUntilHumanTurn(): void
+    -updateScoreIfNeeded(): void
+    -buildGamePayload(): Json
+    -parseStartConfig(payload: Json, currentSettings: Settings): StartConfig
+  }
+}
+
+package "Utility Functions" {
+  class GameUtils <<utility>> {
+    +buildPlayers(count: int, humanCount: int, symbolSet: string): vector<Player>
+    +buildDuelPlayers(symbolSet: string, humanSymbolIndex: int): vector<Player>
+    +evaluateBoard(board: Board, winLength: int): LineResult
+    +randomEmptyCell(board: Board): vector<int>
+    +chooseBlockingMove(board: Board, players: vector<Player>, currentPlayer: int, winLength: int): optional<vector<int>>
+    +countEmptyCells(board: Board): int
+    +makeGame(config: StartConfig): unique_ptr<Game>
+  }
+
+  class StaticFiles <<utility>> {
+    +detectMimeType(path: string): string
+    +readTextFile(path: string): string
+  }
+}
+
+Game <|-- ClassicGame
+Game <|-- UltimateGame
+Game <|-- MultiGame
+
+StartConfig *-- Settings
+StartConfig *-- ClassicConfig
+StartConfig *-- UltimateConfig
+StartConfig *-- MultiConfig
+
+ClassicGame *-- Player
+ClassicGame ..> LineResult
+
+UltimateGame *-- Player
+UltimateGame *-- MiniBoardState
+UltimateGame ..> LineResult
+
+MultiGame *-- Player
+MultiGame ..> LineResult
+
+SessionManager *-- Settings
+SessionManager o-- Game
+SessionManager o-- StartConfig
+
+GameUtils ..> Player
+GameUtils ..> LineResult
+GameUtils ..> StartConfig
+GameUtils ..> Game
+
+MiniBoardState ..> "Board" Board
+ClassicGame ..> "Board" Board
+UltimateGame ..> "Board" Board
+MultiGame ..> "Board" Board
+
+note right of Game
+  Базовый абстрактный класс
+  для всех игровых режимов.
+end note
+
+note right of SessionManager
+  Управляет текущей сессией,
+  счётом между раундами
+  и обменом состояния с frontend.
+end note
+
+note bottom of UltimateGame
+  Для ИИ используется ограниченный
+  эвристический поиск вместо
+  полного minimax.
+end note
+
+@enduml

@@ -5,13 +5,21 @@
 ClassicGame::ClassicGame(const StartConfig& config)
     : Game("classic"),
       board_(3, std::vector<std::string>(3)),
-      players_(buildPlayers(2, config.classic.matchType == "ai" ? 1 : 2, config.settings.symbolSet)),
-      currentPlayer_(config.classic.firstPlayer) {}
+      players_(config.classic.matchType == "ai"
+          ? buildDuelPlayers(config.settings.symbolSet, config.classic.userSymbolIndex)
+          : buildPlayers(2, 2, config.settings.symbolSet)),
+      currentPlayer_(0) {}
 
 MoveResult ClassicGame::applyMove(const Json& move) {
     if (isOver()) {
         return {false, "Игра уже завершена."};
     }
+    if (countEmptyCells(board_) == 1) {
+        draw_ = true;
+        winningCells_.clear();
+        return {true, "draw"};
+    }
+
     const int x = move.value("x", -1);
     const int y = move.value("y", -1);
     if (x < 0 || y < 0 || x >= 3 || y >= 3) {
@@ -44,6 +52,11 @@ bool ClassicGame::currentPlayerIsAi() const {
 
 void ClassicGame::performAiTurn(const std::string& difficulty) {
     if (isOver() || !currentPlayerIsAi()) {
+        return;
+    }
+    if (countEmptyCells(board_) == 1) {
+        draw_ = true;
+        winningCells_.clear();
         return;
     }
 

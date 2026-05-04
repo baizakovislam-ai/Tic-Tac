@@ -18,10 +18,14 @@ class SessionManager {
 
   private:
     void runAiUntilHumanTurn();
+    void updateScoreIfNeeded();
+    Json buildGamePayload() const;
     StartConfig parseStartConfig(const Json& payload, const Settings& currentSettings);
 
     mutable std::mutex mutex_;
     Settings settings_;
     std::unique_ptr<Game> game_;
     std::optional<StartConfig> lastConfig_;
+    std::vector<int> scores_;
+    bool roundScored_ {false};
 };

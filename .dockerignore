@@ -1,0 +1,14 @@
+.git
+.gitignore
+.vscode
+docs/*.png
+backend/build
+backend/third_party/Crow/.github
+backend/third_party/Crow/.git
+backend/third_party/Crow/docs
+backend/third_party/Crow/examples
+backend/third_party/Crow/tests
+backend/third_party/asio/.git
+backend/third_party/asio/.github
+backend/third_party/asio/asio
+backend/third_party/asio/src

@@ -39,12 +39,27 @@ std::vector<Player> buildPlayers(int count, int humanCount, const std::string& s
     for (int index = 0; index < count; ++index) {
         players.push_back(Player{
             index,
-            "Игрок " + std::to_string(index + 1),
+            index >= humanCount ? "ИИ " + std::to_string(index - humanCount + 1) : "Игрок " + std::to_string(index + 1),
             symbols.at(index),
             index >= humanCount
         });
     }
     return players;
+}
+
+std::vector<Player> buildDuelPlayers(const std::string& setKey, int humanSymbolIndex) {
+    const auto symbols = symbolSet(setKey);
+    const int clamped = std::clamp(humanSymbolIndex, 0, 1);
+    if (clamped == 0) {
+        return {
+            Player{0, "Игрок", symbols[0], false},
+            Player{1, "ИИ", symbols[1], true}
+        };
+    }
+    return {
+        Player{0, "ИИ", symbols[0], true},
+        Player{1, "Игрок", symbols[1], false}
+    };
 }
 
 LineResult evaluateBoard(const Board& board, int winLength) {
@@ -77,10 +92,19 @@ LineResult evaluateBoard(const Board& board, int winLength) {
         }
     }
 
-    const bool draw = std::all_of(board.begin(), board.end(), [](const auto& row) {
-        return std::all_of(row.begin(), row.end(), [](const auto& cell) { return !cell.empty(); });
-    });
-    return LineResult{std::nullopt, draw, {}};
+    return LineResult{std::nullopt, countEmptyCells(board) == 0, {}};
+}
+
+int countEmptyCells(const Board& board) {
+    int empty = 0;
+    for (const auto& row : board) {
+        for (const auto& cell : row) {
+            if (cell.empty()) {
+                ++empty;
+            }
+        }
+    }
+    return empty;
 }
 
 std::vector<int> randomEmptyCell(const Board& board) {

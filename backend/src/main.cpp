@@ -4,6 +4,7 @@
 #include <crow.h>
 #include <nlohmann/json.hpp>
 
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 
@@ -40,6 +41,8 @@ int main() {
     SessionManager session;
 
     const fs::path root = detectProjectRoot();
+    const char* portEnv = std::getenv("PORT");
+    const uint16_t port = portEnv ? static_cast<uint16_t>(std::stoi(portEnv)) : 18080;
 
     CROW_ROUTE(app, "/")([&root]() {
         crow::response response;
@@ -85,7 +88,7 @@ int main() {
         return jsonResponse(session.makeMove(parseBody(req)));
     });
 
-    std::cout << "Server running at http://127.0.0.1:18080" << std::endl;
-    app.port(18080).multithreaded().run();
+    std::cout << "Server running on port " << port << std::endl;
+    app.port(port).multithreaded().run();
     return 0;
 }

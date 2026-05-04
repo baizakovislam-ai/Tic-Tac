@@ -34,12 +34,12 @@ struct LineResult {
 
 struct ClassicConfig {
     std::string matchType {"pvp"};
-    int firstPlayer {0};
+    int userSymbolIndex {0};
 };
 
 struct UltimateConfig {
     std::string matchType {"pvp"};
-    int firstPlayer {0};
+    int userSymbolIndex {0};
 };
 
 struct MultiConfig {

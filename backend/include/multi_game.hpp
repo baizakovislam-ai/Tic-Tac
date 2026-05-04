@@ -14,6 +14,8 @@ class MultiGame : public Game {
 
   private:
     void finalizeTurn();
+    std::vector<int> chooseHeuristicMove() const;
+    int evaluateCellScore(int x, int y, int playerIndex) const;
 
     Board board_;
     std::vector<Player> players_;
